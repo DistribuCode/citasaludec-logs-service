@@ -8,76 +8,86 @@ import (
 )
 
 func StartRabbitConsumer() {
+	// Conectar a RabbitMQ
 	conn, err := amqp.Dial("amqp://rabbitmq")
 	if err != nil {
-		log.Fatalf("Failed to connect to RabbitMQ: %s", err)
+		log.Fatalf("❌ Failed to connect to RabbitMQ: %s", err)
 	}
 	defer conn.Close()
 
+	// Abrir canal
 	ch, err := conn.Channel()
 	if err != nil {
-		log.Fatalf("Failed to open a channel: %s", err)
+		log.Fatalf("❌ Failed to open a channel: %s", err)
 	}
 	defer ch.Close()
 
+	// Declarar el exchange 'appointments' tipo fanout
 	err = ch.ExchangeDeclare(
-		"appointments", // name
+		"appointments", // exchange name
 		"fanout",       // type
-		true,           // durable
+		false,           // durable
 		false,          // auto-deleted
 		false,          // internal
 		false,          // no-wait
 		nil,            // arguments
 	)
 	if err != nil {
-		log.Fatalf("Failed to declare exchange: %s", err)
+		log.Fatalf("❌ Failed to declare exchange: %s", err)
 	}
 
+	// Declarar el queue fijo y durable
 	q, err := ch.QueueDeclare(
-		"",    // empty name creates a random queue
-		false, // durable
-		false, // delete when unused
-		true,  // exclusive
-		false, // no-wait
-		nil,   // arguments
+		"appointments-logs", // nombre fijo
+		true,                // durable
+		false,               // delete when unused
+		false,               // exclusive
+		false,               // no-wait
+		nil,                 // arguments
 	)
 	if err != nil {
-		log.Fatalf("Failed to declare a queue: %s", err)
+		log.Fatalf("❌ Failed to declare queue: %s", err)
 	}
 
+	// Bindear el queue al exchange fanout
 	err = ch.QueueBind(
-		q.Name,        // queue name
-		"",            // routing key
-		"appointments", // exchange
+		q.Name,              // nombre del queue
+		"",                  // routing key vacío (fanout)
+		"appointments",      // exchange name
 		false,
 		nil,
 	)
 	if err != nil {
-		log.Fatalf("Failed to bind queue: %s", err)
+		log.Fatalf("❌ Failed to bind queue: %s", err)
 	}
 
+	// Consumir mensajes del queue
 	msgs, err := ch.Consume(
-		q.Name, // queue
-		"",     // consumer
+		q.Name, // nombre del queue
+		"",     // consumer tag
 		true,   // auto-ack
-		true,   // exclusive
+		false,  // exclusive
 		false,  // no-local
 		false,  // no-wait
 		nil,    // args
 	)
 	if err != nil {
-		log.Fatalf("Failed to register consumer: %s", err)
+		log.Fatalf("❌ Failed to register consumer: %s", err)
 	}
 
+	// Procesar mensajes recibidos
 	go func() {
 		for d := range msgs {
 			var event map[string]interface{}
-			json.Unmarshal(d.Body, &event)
+			if err := json.Unmarshal(d.Body, &event); err != nil {
+				log.Printf("⚠️ Failed to unmarshal event: %s", err)
+				continue
+			}
 			log.Printf("📥 Received AppointmentCreated event: %+v", event)
-			// aquí podrías mandar a InfluxDB con influxService
+			// aquí podrías enviar a InfluxDB
 		}
 	}()
 
-	log.Printf(" [*] Waiting for AppointmentCreated events. To exit press CTRL+C")
+	log.Printf("🚀 Waiting for AppointmentCreated events. To exit press CTRL+C")
 	select {}
 }
