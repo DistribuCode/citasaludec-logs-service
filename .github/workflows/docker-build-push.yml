@@ -28,4 +28,4 @@ jobs:
             context: .
             file: ./Dockerfile
             push: true
-            tags: jeff97ares/logs-service:latest
+            tags: jeffri97ares/logs-service:latest
