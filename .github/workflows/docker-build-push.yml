@@ -25,7 +25,7 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
-            context: .
-            file: ./Dockerfile
-            push: true
-            tags: jeffri97ares/logs-service:latest
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: jeffri1997/logs-service:latest
