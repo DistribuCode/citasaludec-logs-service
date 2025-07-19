@@ -43,6 +43,9 @@ jobs:
           printf "%s" "${{ secrets.EC2_KEY }}" | base64 -d > auth-key.pem
           chmod 600 auth-key.pem
 
+      - name: 🕵️ Print key fingerprint (debug)
+        run: |
+          ssh-keygen -l -f auth-key.pem || echo "⚠️ Invalid key"
 
       - name: 🚀 Deploy to EC2 via SSH
         run: |
