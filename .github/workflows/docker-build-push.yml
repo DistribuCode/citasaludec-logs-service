@@ -40,7 +40,7 @@ jobs:
 
       - name: 🔑 Write EC2 SSH key (multiline)
         run: |
-          echo -e "${{ secrets.EC2_KEY }}" > auth-key.pem
+          echo "${{ secrets.EC2_KEY }}" | sed 's/\\n/\n/g' > auth-key.pem
           chmod 600 auth-key.pem
 
       - name: 🕵️ Print key fingerprint (debug)
