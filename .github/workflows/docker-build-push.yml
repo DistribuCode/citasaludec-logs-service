@@ -47,6 +47,16 @@ jobs:
         run: |
           ssh-keygen -l -f auth-key.pem || echo "⚠️ Invalid key"
 
+      - name: 🧰 Install Docker on EC2
+        run: |
+          ssh -o StrictHostKeyChecking=no -i auth-key.pem ec2-user@${{ secrets.EC2_HOST }} << 'EOF'
+            sudo yum update -y
+            sudo amazon-linux-extras enable docker
+            sudo yum install -y docker
+            sudo service docker start
+            sudo usermod -a -G docker ec2-user
+          EOF
+
       - name: 🚀 Deploy to EC2 via SSH
         run: |
           ssh -o StrictHostKeyChecking=no -i auth-key.pem ec2-user@${{ secrets.EC2_HOST }} << 'EOF'
