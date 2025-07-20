@@ -38,30 +38,50 @@ jobs:
       - name: 📥 Checkout code
         uses: actions/checkout@v4
 
-      - name: 🔑 Write EC2 SSH key (multiline)
+      - name: 🔑 Create EC2 SSH key
         run: |
-          echo "${{ secrets.EC2_KEY }}" | sed 's/\\n/\n/g' > auth-key.pem
+          echo "${{ secrets.EC2_KEY }}" > auth-key.pem
           chmod 600 auth-key.pem
-
-      - name: 🕵️ Print key fingerprint (debug)
-        run: |
-          ssh-keygen -l -f auth-key.pem || echo "⚠️ Invalid key"
-
-      - name: 🧰 Install Docker on EC2
-        run: |
-          ssh -o StrictHostKeyChecking=no -i auth-key.pem ec2-user@${{ secrets.EC2_HOST }} << 'EOF'
-            sudo yum update -y
-            sudo amazon-linux-extras enable docker
-            sudo yum install -y docker
-            sudo service docker start
-            sudo usermod -a -G docker ec2-user
-          EOF
 
       - name: 🚀 Deploy to EC2 via SSH
         run: |
           ssh -o StrictHostKeyChecking=no -i auth-key.pem ec2-user@${{ secrets.EC2_HOST }} << 'EOF'
+            # Crear red si no existe
+            docker network inspect my_network >/dev/null 2>&1 || docker network create my_network
+
+            # Iniciar base de datos influxdb
+            docker stop influxdb || true
+            docker rm influxdb || true
+            docker volume create influx_data || true
+            docker run -d \
+              --name influxdb \
+              --network my_network \
+              -p 8086:8086 \
+              -v influx_data:/var/lib/influxdb2 \
+              -e DOCKER_INFLUXDB_INIT_MODE=setup \
+              -e DOCKER_INFLUXDB_INIT_USERNAME=admin \
+              -e DOCKER_INFLUXDB_INIT_PASSWORD=adminpass \
+              -e DOCKER_INFLUXDB_INIT_ORG=myorg \
+              -e DOCKER_INFLUXDB_INIT_BUCKET=audit_events \
+              -e DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=mysecrettoken \
+              influxdb:2.7
+
+            # Esperar que influx esté listo
+            sleep 15
+
+            # Iniciar logs-service
             docker pull jeffri1997/logs-service:latest
             docker stop logs-service || true
             docker rm logs-service || true
-            docker run -d --name logs-service -p 4011:4011 jeffri1997/logs-service:latest
+            docker run -d \
+              --name logs-service \
+              --network my_network \
+              -p 5005:4011 \
+              -e PORT=4011 \
+              -e INFLUX_URL=http://influxdb:8086 \
+              -e INFLUX_TOKEN=mysecrettoken \
+              -e INFLUX_ORG=myorg \
+              -e INFLUX_BUCKET=audit_events \
+              -e JWT_SECRET=supersecretkey \
+              jeffri1997/logs-service:latest
           EOF
